@@ -1,11 +1,7 @@
 pipeline {
     agent any
 
-    tools {
-        nodejs 'node18'
-    }
-
-    environment {
+        environment {
         DOCKER_IMAGE = "dinesh0793/react-app"
         DOCKER_TAG = "${BUILD_NUMBER}"
     }
