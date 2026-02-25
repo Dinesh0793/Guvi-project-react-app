@@ -1,74 +1,72 @@
 pipeline {
     agent any
 
-        environment {
-        DOCKER_IMAGE = "dinesh0793/react-app"
-        DOCKER_TAG = "${BUILD_NUMBER}"
+    environment {
+        DOCKER_IMAGE = "yourdockerhubusername/react-app"
+        DOCKER_TAG = "latest"
     }
 
     stages {
 
+        stage('Checkout Code') {
+            steps {
+                checkout scm
+            }
+        }
+
         stage('Install Dependencies') {
             steps {
-                dir('devops-build-main') {
-                    sh 'npm install'
-                }
+                sh 'npm install'
             }
         }
 
         stage('Build React App') {
             steps {
-                dir('devops-build-main') {
-                    sh 'npm run build'
-                }
+                sh 'npm run build'
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                dir('devops-build-main') {
-                    sh "docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} ."
-                }
+                sh 'docker build -t $DOCKER_IMAGE:$DOCKER_TAG .'
             }
         }
 
         stage('Login to Docker Hub') {
             steps {
                 withCredentials([usernamePassword(
-                    credentialsId: 'dockerhub-creds',
+                    credentialsId: 'dockerhub-credentials',
                     usernameVariable: 'DOCKER_USER',
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
-                    sh """
-                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
-                    """
+                    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
                 }
             }
         }
 
         stage('Push Docker Image') {
             steps {
-                sh "docker push ${DOCKER_IMAGE}:${DOCKER_TAG}"
+                sh 'docker push $DOCKER_IMAGE:$DOCKER_TAG'
             }
         }
 
         stage('Deploy Container') {
             steps {
-                sh """
-                    docker stop react-container || true
-                    docker rm react-container || true
-                    docker run -d -p 3000:80 --name react-container ${DOCKER_IMAGE}:${DOCKER_TAG}
-                """
+                sh '''
+                docker stop react-container || true
+                docker rm react-container || true
+                docker run -d -p 80:80 --name react-container $DOCKER_IMAGE:$DOCKER_TAG
+                '''
             }
         }
     }
 
     post {
-        failure {
-            echo 'Pipeline failed!'
-        }
         success {
             echo 'Pipeline succeeded!'
+        }
+        failure {
+            echo 'Pipeline failed!'
         }
     }
 }
