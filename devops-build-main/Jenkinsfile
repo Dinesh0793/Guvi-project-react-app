@@ -1,53 +1,90 @@
 pipeline {
     agent any
 
+    tools {
+        nodejs 'node18'
+    }
+
     environment {
-        DOCKER_USERNAME = "dinesh0793"
-        IMAGE_NAME = "react-app"
-        TAG = "v5"
+        DOCKER_IMAGE = "dinesh0793/react-app"
+        DOCKER_TAG = "${BUILD_NUMBER}"
     }
 
     stages {
 
-        stage('Clone') {
+        stage('Checkout Code') {
             steps {
                 checkout scm
             }
         }
 
-        stage('Build React App') {
+        stage('Install Dependencies') {
             steps {
                 sh 'npm install'
+            }
+        }
+
+        stage('Build React App') {
+            steps {
                 sh 'npm run build'
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t $IMAGE_NAME:$TAG .'
+                sh "docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} ."
             }
         }
 
-        stage('Tag Image') {
+        stage('Login to Docker Hub') {
             steps {
-                sh 'docker tag $IMAGE_NAME:$TAG $DOCKER_USERNAME/dev:$TAG'
-            }
-        }
-
-        stage('Push to Docker Hub') {
-            steps {
-                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds',
-                usernameVariable: 'USER', passwordVariable: 'PASS')]) {
-                    sh 'echo $PASS | docker login -u $USER --password-stdin'
-                    sh 'docker push $DOCKER_USERNAME/dev:$TAG'
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-creds',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh """
+                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                    """
                 }
             }
         }
 
-        stage('Deploy') {
+        stage('Push Docker Image') {
             steps {
-                sh './deploy.sh $IMAGE_NAME $TAG'
+                sh "docker push ${DOCKER_IMAGE}:${DOCKER_TAG}"
             }
+        }
+
+        stage('Tag as Latest') {
+            steps {
+                sh """
+                    docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_IMAGE}:latest
+                    docker push ${DOCKER_IMAGE}:latest
+                """
+            }
+        }
+
+        stage('Deploy Container') {
+            steps {
+                sh """
+                    docker stop react-container || true
+                    docker rm react-container || true
+                    docker run -d -p 3000:80 --name react-container ${DOCKER_IMAGE}:latest
+                """
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Pipeline executed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed!'
+        }
+        always {
+            cleanWs()
         }
     }
 }
