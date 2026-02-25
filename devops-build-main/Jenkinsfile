@@ -1,0 +1,53 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKER_USERNAME = "dinesh0793"
+        IMAGE_NAME = "react-app"
+        TAG = "v5"
+    }
+
+    stages {
+
+        stage('Clone') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build React App') {
+            steps {
+                sh 'npm install'
+                sh 'npm run build'
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh 'docker build -t $IMAGE_NAME:$TAG .'
+            }
+        }
+
+        stage('Tag Image') {
+            steps {
+                sh 'docker tag $IMAGE_NAME:$TAG $DOCKER_USERNAME/dev:$TAG'
+            }
+        }
+
+        stage('Push to Docker Hub') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds',
+                usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+                    sh 'echo $PASS | docker login -u $USER --password-stdin'
+                    sh 'docker push $DOCKER_USERNAME/dev:$TAG'
+                }
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                sh './deploy.sh $IMAGE_NAME $TAG'
+            }
+        }
+    }
+}
